@@ -39,6 +39,7 @@ static void print_usage(void);
  * has specified one on the command line */
 static char * selected_backend;
 
+#if USE_STANDARD
 /* Global simulator settings, defined in lv_linux_backend.c */
 extern simulator_settings_t settings;
 
@@ -166,3 +167,112 @@ int main(int argc, char ** argv)
 
     return 0;
 }
+
+#else
+
+void debug_print_lvgl_buffer(void)
+{
+    lv_display_t * disp = lv_display_get_default();
+    lv_draw_buf_t * buf = lv_display_get_buf_active(disp);
+    uint8_t * data = buf->data;
+    uint32_t w = lv_display_get_horizontal_resolution(disp);
+    uint32_t h = lv_display_get_vertical_resolution(disp);
+
+    printf("=== LVGL DRAW BUFFER (%dx%d) ===\n", w, h);
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+
+            int byte_index = y * 16 + (x / 8);
+            int bit_index  = 7 - (x % 8);   // bit7 = 左边像素
+
+            int pixel = (data[byte_index] >> bit_index) & 0x01;
+
+            putchar(pixel ? '*' : '-');
+        }
+        putchar('\n');
+    }
+}
+
+static void draw_label(void)
+{
+    // 1. 创建新屏幕对象
+    lv_obj_t * screen = lv_obj_create(NULL);
+    
+    // 2. 设置屏幕为全屏（移除默认边距）
+    lv_obj_set_size(screen, 128, 64);
+    lv_obj_set_style_pad_all(screen, 0, 0);
+    lv_obj_set_style_border_width(screen, 0, 0);
+    
+    // 3. 设置单色屏专用样式
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    
+    // 4. 创建标签
+    lv_obj_t * label = lv_label_create(screen);
+    lv_label_set_text(label, LV_SYMBOL_OK);
+    
+    // 5. 设置标签样式（高对比度）
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+    
+    // 6. 居中标签
+    lv_obj_center(label);
+    
+    // 7. 加载屏幕
+    lv_scr_load(screen); 
+
+}
+static void draw_char_example(void)
+{
+    /* 设置屏幕背景为黑色 */
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
+
+    /* 创建一个 label 对象 */
+    lv_obj_t * label = lv_label_create(lv_screen_active());
+
+    /* 设置要显示的文本 */
+    lv_label_set_text(label, "hello world");
+
+    /* 设置字体颜色为白色（单色屏就是亮点） */
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+
+    /* 设置字体大小：选择 LVGL 内置字体，比如 20 像素 */
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, LV_PART_MAIN);
+
+    /* 居中显示 */
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+}
+
+
+int main(int argc, char **argv){
+
+    driver_backends_register();
+
+    selected_backend = "FBDEV";
+
+    lv_init();
+
+    //registerbackends and then selected_backend
+    /* Initialize the configured backend */
+    if(driver_backends_init_backend(selected_backend) == -1) {
+        die("Failed to initialize display backend");
+    }
+
+    /* Show a char example  */
+    draw_char_example();
+
+    //draw_label();
+
+    /* Enter the run loop of the selected backend */
+    driver_backends_run_loop();
+
+    while (1)
+    {
+        /* code */
+    }
+    
+    return 0;
+}
+
+
+
+#endif
